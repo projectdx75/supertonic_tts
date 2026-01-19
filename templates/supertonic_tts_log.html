@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4">
+    <div class="card bg-dark border-0 shadow-lg">
+        <div class="card-body">
+            <h5 class="card-title"><i class="fa-solid fa-file-lines mr-2"></i>플러그인 로그</h5>
+            <hr class="border-secondary">
+            <div id="log-content" class="bg-darker p-3 rounded" style="font-family: monospace; white-space: pre-wrap; height: 500px; overflow-y: auto; font-size: 0.9rem; color: #cbd5e1; border: 1px solid #334155;">
+                로그를 불러오는 중...
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-darker { background-color: #1e293b !important; }
+</style>
+
+<script>
+$(document).ready(function() {
+    function fetchLog() {
+        $.ajax({
+            url: '/{{ package }}/ajax/log',
+            type: 'POST',
+            success: function(data) {
+                $('#log-content').text(data);
+                // Scroll to bottom
+                const el = document.getElementById('log-content');
+                el.scrollTop = el.scrollHeight;
+            }
+        });
+    }
+    fetchLog();
+    setInterval(fetchLog, 2000);
+});
+</script>
+{% endblock %}

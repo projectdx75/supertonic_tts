@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('.static', filename='css/main.css') }}">
+
+<div class="supertonic-dark">
+    <div class="container py-2">
+        <header class="text-center mb-4">
+            <h1 class="display-4 font-weight-bold">Supertonic TTS <span class="badge badge-primary">v2</span></h1>
+            <p class="lead text-muted">빠르고 가벼운 온디바이스 AI 음성 합성</p>
+        </header>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card bg-darker border-0 shadow-lg mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4"><i class="fa-solid fa-pen-to-square mr-2"></i>텍스트 입력</h5>
+                        <textarea id="tts-input" class="form-control bg-transparent text-light border-secondary" rows="8" placeholder="음성으로 변환할 내용을 입력하세요..."></textarea>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <span class="text-muted small" id="char-count">0자 / 5000자</span>
+                            <button id="btn-generate" class="btn btn-primary btn-lg px-5 font-weight-bold">
+                                <i class="fa-solid fa-play mr-2"></i>합성하기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="audio-result" class="card bg-darker border-0 shadow-lg d-none">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">결과</h5>
+                        <div class="d-flex align-items-center">
+                            <audio id="main-audio" controls class="w-100 mr-3"></audio>
+                            <a id="btn-download" href="#" class="btn btn-outline-success" download="speech.wav">
+                                <i class="fa-solid fa-download"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card bg-darker border-0 shadow-lg">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4"><i class="fa-solid fa-sliders mr-2"></i>설정</h5>
+                        
+                        <div class="form-group">
+                            <label class="text-muted small">목소리 선택</label>
+                            <select id="voice-select" class="form-control bg-dark border-secondary text-light">
+                                <option value="default">Default (Korean)</option>
+                                <option value="f_01">Sarah (English)</option>
+                                <option value="m_01">James (English)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="d-flex justify-content-between">
+                                <label class="text-muted small">속도 (Speed)</label>
+                                <span class="value-badge" id="speed-val">1.0x</span>
+                            </div>
+                            <input type="range" class="custom-range" id="speed-range" min="0.5" max="2.0" step="0.1" value="1.0">
+                        </div>
+
+                        <div class="form-group">
+                            <div class="d-flex justify-content-between">
+                                <label class="text-muted small">피치 (Pitch)</label>
+                                <span class="value-badge" id="pitch-val">1.0</span>
+                            </div>
+                            <input type="range" class="custom-range" id="pitch-range" min="0.5" max="1.5" step="0.1" value="1.0">
+                        </div>
+
+                        <div class="form-group">
+                            <div class="d-flex justify-content-between">
+                                <label class="text-muted small">품질 (Quality/Steps)</label>
+                                <span class="value-badge" id="steps-val">5</span>
+                            </div>
+                            <input type="range" class="custom-range" id="steps-range" min="1" max="20" step="1" value="5">
+                            <small class="form-text text-muted">높을수록 고품질이나 느려짐 (기본: 5)</small>
+                        </div>
+
+
+                        <hr class="border-secondary">
+
+                        <div class="form-group mb-0">
+                            <label class="text-muted small">미디어 정보</label>
+                            <div class="info-box small p-2 bg-dark rounded text-muted">
+                                <div>Engine: Supertonic v2 (ONNX)</div>
+                                <div>Latency: <span id="stat-latency">--</span>ms</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('.static', filename='js/main.js') }}"></script>
+{% endblock %}

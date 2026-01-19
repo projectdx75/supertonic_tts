@@ -1,0 +1,47 @@
+:root {
+    --bg-dark: #0f172a;
+    --bg-darker: #1e293b;
+    --text-primary: #f1f5f9;
+    --accent: #3b82f6;
+}
+
+.supertonic-dark {
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.bg-darker {
+    background-color: var(--bg-darker) !important;
+}
+
+.card {
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+textarea:focus {
+    background-color: transparent !important;
+    color: #fff !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25) !important;
+}
+
+.value-badge {
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+.custom-range::-webkit-slider-thumb {
+    background: var(--accent);
+}
+
+.info-box {
+    border: 1px solid #334155;
+}
+
+#tts-input {
+    resize: none;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}

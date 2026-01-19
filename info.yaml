@@ -1,0 +1,7 @@
+title: "Supertonic TTS"
+version: 0.2.0
+package_name: "supertonic_tts"
+developer: "projectdx"
+description: "High-performance ONNX-based Text-to-Speech plugin using Supertonic engine."
+home: "https://github.com/projectdx75/supertonic-tts"
+more: ""
