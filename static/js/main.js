@@ -1,6 +1,19 @@
 $(document).ready(function() {
     const pkg = 'supertonic_tts';
     
+    const voiceNames = {
+        'F1': 'Sarah',
+        'F2': 'Lily',
+        'F3': 'Jessica',
+        'F4': 'Olivia',
+        'F5': 'Emily',
+        'M1': 'Alex',
+        'M2': 'James',
+        'M3': 'Robert',
+        'M4': 'Sam',
+        'M5': 'Daniel'
+    };
+
     // 목소리 목록 가져오기
     function fetchVoices() {
         $.ajax({
@@ -11,7 +24,8 @@ $(document).ready(function() {
                     const select = $('#voice-select');
                     select.empty();
                     resp.voices.forEach(v => {
-                        select.append(`<option value="${v}">${v}</option>`);
+                        const displayName = voiceNames[v] || v;
+                        select.append(`<option value="${v}">${displayName}</option>`);
                     });
                 }
             }

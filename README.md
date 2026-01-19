@@ -7,6 +7,7 @@ High-performance ONNX-based Text-to-Speech plugin for FlaskFarm, utilizing the S
 ## Features
 
 - **High-Fidelity Multilingual TTS**: Uses Supertonic-2 Flow Matching model for natural-sounding speech.
+- **Human-Friendly Voices**: 10 distinct voices (5 Female: Sarah, Lily, Jessica, Olivia, Emily | 5 Male: Alex, James, Robert, Sam, Daniel).
 - **Dynamic Quality Control**: Adjustable synthesis steps (1-100) via UI to balance speed and quality.
 - **Improved EPUB Navigation**: Smart text extraction that ignores hidden elements and ruby text (furigana), preventing duplicate reading.
 - **Consistency Engine**: Fixed random seed initialization to ensure stable voice timbre across long document segments.
@@ -31,7 +32,12 @@ The plugin automatically handles model downloading from HuggingFace (`Supertone/
 
 ## Version History
 
-### 0.2.0 (Latest)
+### 0.2.1 (Latest)
+- **UI/UX Enhancement**:
+    - Renamed technical voice IDs (F1-F5, M1-M5) to human-friendly names (Sarah, Lily, Alex, etc.).
+- **Metadata Update**: Version bump and sync with GitHub.
+
+### 0.2.0
 - **Quality Debugging & Stability**:
     - Fixed duplicate reading issues in EPUB and long text.
     - Implemented random seed pinning (Seed: 42) for consistent voice tone.
