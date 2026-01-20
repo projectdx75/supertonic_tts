@@ -318,6 +318,7 @@ class Logic(PluginModuleBase):
                 # We use the same cache dir as the server
                 cache_dir = os.environ.get("SUPERTONIC_CACHE_DIR", os.path.expanduser("~/.cache/supertonic-2"))
                 
+                self._get_engine()
                 return jsonify({
                     'ret': 'success',
                     'cache_dir': cache_dir,
@@ -348,17 +349,22 @@ class Logic(PluginModuleBase):
                 
                 self.P.logger.debug(f"[TTS] Serving model file: {filename} from {cache_dir}")
                 
-                full_path = os.path.join(cache_dir, filename)
-                if not os.path.exists(full_path):
-                    self.P.logger.error(f"[TTS] Model file NOT FOUND: {full_path}")
-                
                 # Security: check if file is in voice_styles subfolder or root cache
                 if filename.startswith('voice_styles/'):
                     return send_from_directory(cache_dir, filename)
-                else:
-                    # restrict to root cache files (onnx, json)
-                    basename = os.path.basename(filename)
-                    return send_from_directory(cache_dir, basename)
+                
+                basename = os.path.basename(filename)
+                
+                # Check if it exists in root or onnx/ subdirectory
+                if not os.path.exists(os.path.join(cache_dir, basename)):
+                    onnx_path = os.path.join(cache_dir, 'onnx', basename)
+                    if os.path.exists(onnx_path):
+                        cache_dir = os.path.join(cache_dir, 'onnx')
+                        self.P.logger.debug(f"[TTS] Model file found in onnx/ subfolder: {basename}")
+                    else:
+                        self.P.logger.error(f"[TTS] Model file NOT FOUND: {basename} (checked {cache_dir} and onnx/ subfolder)")
+                
+                return send_from_directory(cache_dir, basename)
             
             elif sub == 'log':
                 log_path = os.path.join(F.config['path_log'], f"{self.P.package_name}.log")
