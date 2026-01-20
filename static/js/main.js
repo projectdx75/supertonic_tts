@@ -34,6 +34,33 @@ $(document).ready(function() {
 
     fetchVoices();
 
+    // 상태 정보 가져오기
+    function fetchStatus() {
+        $.ajax({
+            url: `/${pkg}/ajax/get_status`,
+            type: 'POST',
+            success: function(resp) {
+                if (resp.ret === 'success') {
+                    const badge = $('#patch-badge');
+                    if (resp.patch.overall) {
+                        badge.removeClass('badge-secondary').addClass('badge-success').text('Patched');
+                    } else {
+                        badge.removeClass('badge-secondary').addClass('badge-warning').text('Patch Required');
+                    }
+                    
+                    $('#status-info').html(`
+                        Python: ${resp.env.python.split(' ')[0]} | 
+                        Platform: ${resp.env.platform} |
+                        Core: ${resp.patch.core ? 'OK' : 'ERR'} |
+                        Pipe: ${resp.patch.pipeline ? 'OK' : 'ERR'}
+                    `);
+                }
+            }
+        });
+    }
+
+    fetchStatus();
+
     // UI 동기화
     $('#speed-range').on('input', function() {
         $('#speed-val').text($(this).val() + 'x');
@@ -52,7 +79,7 @@ $(document).ready(function() {
     });
 
     // 합성 버튼 클릭
-    $('#btn-generate').on('click', function() {
+    $('#generate-btn').on('click', function() {
         const text = $('#tts-input').val().trim();
         if (!text) {
             alert('텍스트를 입력하세요.');
@@ -93,7 +120,7 @@ $(document).ready(function() {
                 alert('서버 오류 발생');
             },
             complete: function() {
-                $('#btn-generate').prop('disabled', false).html('<i class="fa-solid fa-play mr-2"></i>합성하기');
+                $('#generate-btn').prop('disabled', false).html('<i class="fa-solid fa-play mr-2"></i>합성 및 재생');
             }
         });
     });

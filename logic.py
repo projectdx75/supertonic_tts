@@ -32,6 +32,93 @@ class Logic(PluginModuleBase):
         os.environ["SUPERTONIC_MODEL_REPO"] = "Supertone/supertonic-2"
         os.environ["SUPERTONIC_MODEL_REVISION"] = "main"
         os.environ["SUPERTONIC_CACHE_DIR"] = os.path.expanduser("~/.cache/supertonic-2")
+        
+        # Self-Check and Patch on start
+        self._check_and_install_dependencies()
+        self._check_and_patch_library()
+
+    def _check_and_install_dependencies(self) -> None:
+        """Check for missing dependencies and install them if necessary."""
+        required = ["supertonic", "onnxruntime", "soundfile", "huggingface_hub", "numpy", "unicodedata2"]
+        missing = []
+        for pkg in required:
+            try:
+                if pkg == "supertonic": import supertonic
+                elif pkg == "onnxruntime": import onnxruntime
+                elif pkg == "soundfile": import soundfile
+                elif pkg == "huggingface_hub": import huggingface_hub
+                elif pkg == "numpy": import numpy
+                elif pkg == "unicodedata2": import unicodedata2
+            except ImportError:
+                missing.append(pkg)
+        
+        if missing:
+            self.P.logger.warning(f"[TTS] Missing dependencies: {missing}. Attempting installation...")
+            try:
+                import subprocess
+                subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
+                self.P.logger.info(f"[TTS] Successfully installed: {missing}")
+            except Exception as e:
+                self.P.logger.error(f"[TTS] Failed to install dependencies: {e}")
+
+    def _check_and_patch_library(self) -> None:
+        """Check if the internal supertonic library has been patched with our fixes."""
+        try:
+            import supertonic
+            import shutil
+            lib_path = os.path.dirname(supertonic.__file__)
+            core_py = os.path.join(lib_path, "core.py")
+            pipeline_py = os.path.join(lib_path, "pipeline.py")
+            
+            patch_dir = os.path.join(os.path.dirname(__file__), "lib_patches")
+            patch_core = os.path.join(patch_dir, "core.py")
+            patch_pipeline = os.path.join(patch_dir, "pipeline.py")
+            
+            patched = True
+            
+            # 1. Check core.py for random seed fix
+            if os.path.exists(core_py) and os.path.exists(patch_core):
+                with open(core_py, 'r', encoding='utf-8') as f:
+                    if "np.random.seed(42)" not in f.read():
+                        self.P.logger.warning("[TTS] core.py not patched. Patching from plugin...")
+                        shutil.copy(patch_core, core_py)
+                        patched = False
+            
+            # 2. Check pipeline.py for lang propagation
+            if os.path.exists(pipeline_py) and os.path.exists(patch_pipeline):
+                 with open(pipeline_py, 'r', encoding='utf-8') as f:
+                    if "lang: Optional[str] = None" not in f.read():
+                         self.P.logger.warning("[TTS] pipeline.py not patched. Patching from plugin...")
+                         shutil.copy(patch_pipeline, pipeline_py)
+                         patched = False
+            
+            if not patched:
+                self.P.logger.info("[TTS] Library self-patching completed. A server restart might be recommended.")
+            else:
+                self.P.logger.info("[TTS] Library already patched.")
+                
+        except Exception as e:
+            self.P.logger.error(f"[TTS] Library patching failed: {e}")
+            self.P.logger.error(traceback.format_exc())
+
+    def get_patch_status(self) -> Dict[str, Any]:
+        """Check the current patch status of the library."""
+        try:
+            import supertonic
+            lib_path = os.path.dirname(supertonic.__file__)
+            core_py = os.path.join(lib_path, "core.py")
+            pipeline_py = os.path.join(lib_path, "pipeline.py")
+            
+            core_ok = "np.random.seed(42)" in open(core_py, 'r', encoding='utf-8').read() if os.path.exists(core_py) else False
+            pipe_ok = "lang: Optional[str] = None" in open(pipeline_py, 'r', encoding='utf-8').read() if os.path.exists(pipeline_py) else False
+            
+            return {
+                'core': core_ok,
+                'pipeline': pipe_ok,
+                'overall': core_ok and pipe_ok
+            }
+        except:
+            return {'overall': False}
 
     def _get_engine(self) -> Optional[Any]:
         """Lazy initialization of the TTS engine with error handling."""
@@ -189,6 +276,17 @@ class Logic(PluginModuleBase):
                 return jsonify({
                     "ret": "success" if current_engine else "error", 
                     "voices": self.voices
+                })
+            
+            elif sub == 'get_status':
+                import sys
+                return jsonify({
+                    'ret': 'success',
+                    'patch': self.get_patch_status(),
+                    'env': {
+                        'python': sys.version,
+                        'platform': sys.platform,
+                    }
                 })
             
             elif sub == 'log':

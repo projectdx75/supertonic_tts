@@ -1,0 +1,6 @@
+supertonic>=1.0.0
+onnxruntime>=1.15.0
+soundfile
+huggingface_hub
+numpy
+unicodedata2
