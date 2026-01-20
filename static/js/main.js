@@ -43,16 +43,17 @@ $(document).ready(function() {
                 if (resp.ret === 'success') {
                     const badge = $('#patch-badge');
                     if (resp.patch.overall) {
-                        badge.removeClass('badge-secondary').addClass('badge-success').text('Patched');
+                        badge.removeClass('badge-secondary badge-warning').addClass('badge-success').text('Ready');
+                    } else if (resp.patch.disk && resp.patch.disk.pipeline && !resp.patch.memory) {
+                        badge.removeClass('badge-secondary badge-success').addClass('badge-warning').text('Restart Required');
                     } else {
-                        badge.removeClass('badge-secondary').addClass('badge-warning').text('Patch Required');
+                        badge.removeClass('badge-secondary badge-success').addClass('badge-danger').text('Patch Error');
                     }
                     
                     $('#status-info').html(`
                         Python: ${resp.env.python.split(' ')[0]} | 
-                        Platform: ${resp.env.platform} |
-                        Core: ${resp.patch.core ? 'OK' : 'ERR'} |
-                        Pipe: ${resp.patch.pipeline ? 'OK' : 'ERR'}
+                        Disk: ${resp.patch.disk ? (resp.patch.disk.core ? 'OK' : 'ERR') : 'ERR'}/${resp.patch.disk ? (resp.patch.disk.pipeline ? 'OK' : 'ERR') : 'ERR'} |
+                        Memory: ${resp.patch.memory ? 'LOADED' : 'OLD'}
                     `);
                 }
             }

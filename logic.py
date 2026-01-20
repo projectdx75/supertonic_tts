@@ -12,6 +12,9 @@ from framework import F
 from plugin import PluginModuleBase
 from flask import jsonify, request, Response
 
+import importlib
+import inspect
+
 class Logic(PluginModuleBase):
     def __init__(self, P: Any) -> None:
         super(Logic, self).__init__(P, name='logic')
@@ -93,32 +96,47 @@ class Logic(PluginModuleBase):
                          patched = False
             
             if not patched:
-                self.P.logger.info("[TTS] Library self-patching completed. A server restart might be recommended.")
+                self.P.logger.info("[TTS] Library self-patching completed. Forcing module reload...")
+                try:
+                    importlib.reload(supertonic)
+                    if hasattr(supertonic, 'core'): importlib.reload(supertonic.core)
+                    if hasattr(supertonic, 'pipeline'): importlib.reload(supertonic.pipeline)
+                    self.P.logger.info("[TTS] Supertonic modules reloaded successfully.")
+                except Exception as re_err:
+                    self.P.logger.error(f"[TTS] Module reload failed: {re_err}")
             else:
                 self.P.logger.info("[TTS] Library already patched.")
                 
+        except PermissionError:
+            self.P.logger.error("[TTS] Permission denied while patching library. Please run: sudo chmod -R 777 /path/to/supertonic")
         except Exception as e:
             self.P.logger.error(f"[TTS] Library patching failed: {e}")
             self.P.logger.error(traceback.format_exc())
 
     def get_patch_status(self) -> Dict[str, Any]:
-        """Check the current patch status of the library."""
+        """Check the current patch status of the library (On-disk and In-memory)."""
         try:
             import supertonic
             lib_path = os.path.dirname(supertonic.__file__)
             core_py = os.path.join(lib_path, "core.py")
             pipeline_py = os.path.join(lib_path, "pipeline.py")
             
-            core_ok = "np.random.seed(42)" in open(core_py, 'r', encoding='utf-8').read() if os.path.exists(core_py) else False
-            pipe_ok = "lang: Optional[str] = None" in open(pipeline_py, 'r', encoding='utf-8').read() if os.path.exists(pipeline_py) else False
+            # 1. On-Disk Check
+            disk_core_ok = "np.random.seed(42)" in open(core_py, 'r', encoding='utf-8').read() if os.path.exists(core_py) else False
+            disk_pipe_ok = "lang: Optional[str] = None" in open(pipeline_py, 'r', encoding='utf-8').read() if os.path.exists(pipeline_py) else False
+            
+            # 2. In-Memory Check (Check if 'lang' exists in synthesize signature)
+            from supertonic import TTS
+            sig = inspect.signature(TTS.synthesize)
+            memory_ok = 'lang' in sig.parameters
             
             return {
-                'core': core_ok,
-                'pipeline': pipe_ok,
-                'overall': core_ok and pipe_ok
+                'disk': {'core': disk_core_ok, 'pipeline': disk_pipe_ok},
+                'memory': memory_ok,
+                'overall': disk_pipe_ok and memory_ok
             }
-        except:
-            return {'overall': False}
+        except Exception as e:
+            return {'overall': False, 'error': str(e)}
 
     def _get_engine(self) -> Optional[Any]:
         """Lazy initialization of the TTS engine with error handling."""
