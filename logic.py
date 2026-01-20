@@ -331,15 +331,26 @@ class Logic(PluginModuleBase):
                         'config': 'tts.json'
                     }
                 })
-            
-                })
 
             elif sub == 'get_file':
                 # Serve model files from cache dir
                 filename = req.args.get('file')
                 if not filename: return jsonify({'ret': 'error', 'msg': 'No file specified'})
                 
+                # Try to get cache dir from engine if initialized, otherwise fallback
                 cache_dir = os.environ.get("SUPERTONIC_CACHE_DIR", os.path.expanduser("~/.cache/supertonic-2"))
+                
+                # Check if it exists, if not, try searching in common locations
+                if not os.path.exists(cache_dir):
+                    alt_path = os.path.join(os.path.dirname(os.path.dirname(inspect.getfile(self.__class__))), '.cache', 'supertonic-2')
+                    if os.path.exists(alt_path):
+                        cache_dir = alt_path
+                
+                self.P.logger.debug(f"[TTS] Serving model file: {filename} from {cache_dir}")
+                
+                full_path = os.path.join(cache_dir, filename)
+                if not os.path.exists(full_path):
+                    self.P.logger.error(f"[TTS] Model file NOT FOUND: {full_path}")
                 
                 # Security: check if file is in voice_styles subfolder or root cache
                 if filename.startswith('voice_styles/'):
