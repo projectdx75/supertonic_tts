@@ -135,6 +135,11 @@ class Logic(PluginModuleBase):
                 return None
         return self.tts
 
+    def generate_tts(
+        self, 
+        text: str, 
+        voice: str = 'default', 
+        speed: float = 1.0, 
         pitch: float = 1.0, 
         steps: int = 5,
         lang: Optional[str] = None
