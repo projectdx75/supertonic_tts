@@ -11,6 +11,10 @@ __menu = {
             'name': '설정'
         },
         {
+            'uri': 'web',
+            'name': 'Web TTS (Beta)'
+        },
+        {
             'uri': 'log',
             'name': '로그'
         }
@@ -38,6 +42,8 @@ class LogicModule(PluginModuleBase):
     def process_menu(self, sub, req):
         if sub == 'log':
             return render_template('supertonic_tts_log.html', package=self.P.package_name)
+        if sub == 'web':
+            return render_template('supertonic_tts_web.html', package=self.P.package_name)
         return render_template('supertonic_tts_main.html', package=self.P.package_name)
 
     def process_ajax(self, sub, req):

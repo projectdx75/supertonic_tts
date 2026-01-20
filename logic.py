@@ -10,7 +10,7 @@ from datetime import datetime
 
 from framework import F
 from plugin import PluginModuleBase
-from flask import jsonify, request, Response
+from flask import jsonify, request, Response, send_from_directory
 
 import importlib
 import inspect
@@ -311,6 +311,43 @@ class Logic(PluginModuleBase):
                         'platform': sys.platform,
                     }
                 })
+
+            elif sub == 'get_model_config':
+                import supertonic
+                lib_path = os.path.dirname(supertonic.__file__)
+                # We use the same cache dir as the server
+                cache_dir = os.environ.get("SUPERTONIC_CACHE_DIR", os.path.expanduser("~/.cache/supertonic-2"))
+                
+                return jsonify({
+                    'ret': 'success',
+                    'cache_dir': cache_dir,
+                    'voices': self.voices,
+                    'models': {
+                        'encoder': 'text_encoder.onnx',
+                        'dp': 'duration_predictor.onnx',
+                        'estimator': 'vector_estimator.onnx',
+                        'vocoder': 'vocoder.onnx',
+                        'indexer': 'unicode_indexer.json',
+                        'config': 'tts.json'
+                    }
+                })
+            
+                })
+
+            elif sub == 'get_file':
+                # Serve model files from cache dir
+                filename = req.args.get('file')
+                if not filename: return jsonify({'ret': 'error', 'msg': 'No file specified'})
+                
+                cache_dir = os.environ.get("SUPERTONIC_CACHE_DIR", os.path.expanduser("~/.cache/supertonic-2"))
+                
+                # Security: check if file is in voice_styles subfolder or root cache
+                if filename.startswith('voice_styles/'):
+                    return send_from_directory(cache_dir, filename)
+                else:
+                    # restrict to root cache files (onnx, json)
+                    basename = os.path.basename(filename)
+                    return send_from_directory(cache_dir, basename)
             
             elif sub == 'log':
                 log_path = os.path.join(F.config['path_log'], f"{self.P.package_name}.log")
