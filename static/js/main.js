@@ -71,7 +71,8 @@ $(document).ready(function() {
                 voice: $('#voice-select').val(),
                 speed: $('#speed-range').val(),
                 pitch: $('#pitch-range').val(),
-                steps: $('#steps-range').val()
+                steps: $('#steps-range').val(),
+                lang: $('#lang-select').val()
             },
             success: function(resp) {
                 if (resp.ret === 'success') {

@@ -1,141 +1,145 @@
-from framework import F
-from plugin import PluginModuleBase
-from flask import jsonify, request
+from typing import List, Dict, Any, Optional, Union
 import os
 import numpy as np
 import traceback
 import sys
-import platform
+import unicodedata
+import re
+import subprocess
+from datetime import datetime
+
+from framework import F
+from plugin import PluginModuleBase
+from flask import jsonify, request, Response
 
 class Logic(PluginModuleBase):
-    def __init__(self, P):
+    def __init__(self, P: Any) -> None:
         super(Logic, self).__init__(P, name='logic')
-        self.tts = None
-        self.voices = []
-        # Dummy trio to bypass the "unsupported platform" error in httpcore/trio on macOS
+        self.tts: Optional[Any] = None
+        self.voices: List[str] = []
+        
+        # [REFACTORED] Dummy trio mock - centralized and cleaner
         if 'trio' not in sys.modules:
             try:
                 from unittest.mock import MagicMock
                 sys.modules['trio'] = MagicMock()
+                self.P.logger.debug("[TTS] MagicMock for 'trio' applied to bypass platform constraints.")
             except ImportError:
                 pass
         
         # Configure for Multilingual support (Supertone/supertonic-2)
+        # Using environment variables to configure internal library behavior
         os.environ["SUPERTONIC_MODEL_REPO"] = "Supertone/supertonic-2"
         os.environ["SUPERTONIC_MODEL_REVISION"] = "main"
         os.environ["SUPERTONIC_CACHE_DIR"] = os.path.expanduser("~/.cache/supertonic-2")
 
-    def _get_engine(self):
+    def _get_engine(self) -> Optional[Any]:
+        """Lazy initialization of the TTS engine with error handling."""
         if self.tts is None:
             try:
                 from supertonic import TTS
-                # Default cache is ~/.cache/supertonic
+                # Default cache is ~/.cache/supertonic-2 due to env vars above
                 self.tts = TTS(auto_download=True)
-                self.voices = self.tts.voice_style_names
-                self.P.logger.info(f"[TTS] Engine initialized. Voices: {self.voices}")
+                self.voices = getattr(self.tts, 'voice_style_names', [])
+                self.P.logger.info(f"[TTS] Engine initialized. Available voices: {len(self.voices)}")
             except Exception as e:
-                self.P.logger.error(f"[TTS] Initialization failed: {e}")
+                self.P.logger.error(f"[TTS] Engine initialization failed: {str(e)}")
                 self.P.logger.error(traceback.format_exc())
+                return None
         return self.tts
 
-    # Core TTS logic
-    def generate_tts(self, text, voice='default', speed=1.0, pitch=1.0, steps=5):
+        pitch: float = 1.0, 
+        steps: int = 5,
+        lang: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate TTS audio from text with specified parameters and post-processing.
+        
+        Returns: 
+            Dict containing 'ret', 'url', 'latency', 'duration' or 'message' on error.
+        """
         try:
-            if not text:
-                return {"ret": "error", "message": "Text is empty"}
+            if not text or not text.strip():
+                return {"ret": "error", "message": "입력 텍스트가 비어있습니다."}
                 
             # AUTO-FIX: MacOS NFD -> NFC normalization
-            # Supertonic/Hangul generally expects NFC (composed) characters.
-            import unicodedata
+            # Supertonic engine expects NFC (composed) characters for better accuracy.
             text = unicodedata.normalize('NFC', text)
                 
             engine = self._get_engine()
             if engine is None:
-                return {"ret": "error", "message": "Engine not initialized"}
+                return {"ret": "error", "message": "TTS 엔진 초기화에 실패했습니다."}
 
-            # Handle speed constraints
-            # Supertonic supports 0.7 ~ 2.0 natively.
-            # If user requests outside this range (e.g. 0.5), we generate at 1.0 
-            # and use FFmpeg 'atempo' to slow it down post-process.
+            # Speed constraints post-processing determination
+            # Native range: 0.7 ~ 2.0. Outside this, we use FFmpeg post-processing.
             target_speed = float(speed)
             native_speed = target_speed
             use_ffmpeg_speed = False
             
             if target_speed < 0.7 or target_speed > 2.0:
-                self.P.logger.info(f"[TTS] Speed {target_speed} is outside native range (0.7-2.0). Using FFmpeg post-processing.")
+                self.P.logger.info(f"[TTS] Requested speed ({target_speed}) outside native range (0.7-2.0). Using FFmpeg.")
                 native_speed = 1.0
                 use_ffmpeg_speed = True
             
-            self.P.logger.info(f"[TTS] Generating for: {text[:50]}...")
+            self.P.logger.info(f"[TTS] Generating (Voice: {voice}, Steps: {steps}, Speed: {target_speed}) for text length: {len(text)}")
             
-            # Map simple voice names if needed, or use directly
+            # Voice Mapping logic
             voice_name = voice if voice in self.voices else (self.voices[0] if self.voices else "M1")
-            style = engine.get_voice_style(voice_name)
             
-            # Synthesize
-            self.P.logger.info(f"[TTS] Synthesize params - TargetSpeed: {target_speed}, NativeSpeed: {native_speed}, Steps: {steps}, Voice: {voice_name}")
-            
-            # Trust engine sample rate (usually 44100)
             try:
-                engine_sr = getattr(engine, 'sample_rate', 
-                                  getattr(engine, 'fs', 
-                                          getattr(engine, 'sampling_rate', 44100)))
-            except:
-                engine_sr = 44100
+                style = engine.get_voice_style(voice_name)
+            except Exception as style_err:
+                self.P.logger.warning(f"[TTS] Failed to get voice style '{voice_name}': {style_err}. Falling back.")
+                style = engine.get_voice_style(self.voices[0]) if self.voices else None
 
             # Synthesize with retry logic for unsupported characters
             max_retries = 3
+            wav = None
+            duration = [0.0]
+            
             for attempt in range(max_retries):
                 try:
                     wav, duration = engine.synthesize(
                         text=text,
                         voice_style=style,
                         speed=native_speed,
-                        total_steps=steps, # Quality
-                        verbose=False # Production
+                        total_steps=steps, 
+                        verbose=False,
+                        lang=lang
                     )
-                    break # Success
+                    break
                 except ValueError as ve:
                     error_msg = str(ve)
-                    if "unsupported character" in error_msg and attempt < max_retries - 1:
-                        # Extract characters from error message
-                        # Msg format: "Found X unsupported character(s): ['A', 'B']"
-                        import re
+                    if "unsupported character" in error_msg.lower() and attempt < max_retries - 1:
                         match = re.search(r"\[(.*?)\]", error_msg)
                         if match:
                             chars_str = match.group(1)
-                            # Parse expected list format " 'A', 'B' "
                             bad_chars = [c.strip().strip("'").strip('"') for c in chars_str.split(',')]
-                            self.P.logger.warning(f"[TTS] Removing unsupported characters: {bad_chars}")
-                            
+                            self.P.logger.warning(f"[TTS] Removing unsupported characters (Attempt {attempt+1}): {bad_chars}")
                             for char in bad_chars:
                                 text = text.replace(char, '')
-                                
                             if not text.strip():
-                                raise ValueError("Text became empty after removing unsupported characters")
+                                raise ValueError("지원하지 않는 문자를 제거한 후 텍스트가 비어버렸습니다.")
                             continue
-                    raise ve # Re-raise if not unsupported char error or retries exhausted
+                    raise ve
             
-            # Save to temporary/static location
+            if wav is None:
+                throw_err = "음성 생성 결과가 비어있습니다."
+                raise ValueError(throw_err)
+
+            # File Management
             filename = f"tts_{os.urandom(4).hex()}.wav"
             static_dir = os.path.join(os.path.dirname(__file__), 'static', 'output')
-            if not os.path.exists(static_dir):
-                os.makedirs(static_dir)
+            os.makedirs(static_dir, exist_ok=True)
             
             output_path = os.path.join(static_dir, filename)
             engine.save_audio(wav, output_path)
             
-            # POST-PROCESSING: Speed Adjustment (atempo)
-            # Apply if we decided to use ffmpeg, OR if we want to support broader range safely
+            # Post-processing: FFmpeg atempo for extended speed range
             if use_ffmpeg_speed:
                 try:
-                    import subprocess
-                    self.P.logger.info(f"[TTS] Applying ffmpeg atempo: {target_speed}x")
-                    
                     temp_output = output_path + ".tmp.wav"
-                    # atempo filter changes speed without changing pitch
-                    # Limits: atempo only supports 0.5 to 2.0 in one pass.
-                    # If we need more extreme, we might need chaining, but user range is 0.5-2.0 so single pass is fine.
+                    self.P.logger.debug(f"[TTS] FFmpeg atempo processing: {output_path}")
                     
                     cmd = [
                         'ffmpeg', '-y', '-i', output_path,
@@ -143,22 +147,16 @@ class Logic(PluginModuleBase):
                         temp_output
                     ]
                     
-                    # Run ffmpeg
                     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     
-                    # Replace original if successful
                     if os.path.exists(temp_output):
                         os.replace(temp_output, output_path)
-                        self.P.logger.info("[TTS] Speed adjustment successful")
-                        
-                        # Update duration roughly
                         duration = [duration[0] / target_speed] 
-                except Exception as e:
-                    self.P.logger.error(f"[TTS] Speed adjustment failed: {e}")
-                    import traceback
-                    self.P.logger.error(traceback.format_exc())
-            
-            # Return URL for frontend
+                        self.P.logger.info(f"[TTS] FFmpeg speed adjustment ({target_speed}x) completed.")
+                except Exception as ffmpeg_err:
+                    self.P.logger.error(f"[TTS] FFmpeg post-processing failed: {ffmpeg_err}")
+
+            # Return metadata for frontend
             url = f"/{self.P.package_name}/static/output/{filename}"
             return {
                 "ret": "success", 
@@ -167,27 +165,29 @@ class Logic(PluginModuleBase):
                 "duration": float(round(float(duration[0]), 2))
             }
         except Exception as e:
-            self.P.logger.error(f"TTS Error: {e}")
-            import traceback
+            self.P.logger.error(f"[TTS] Global generation error: {str(e)}")
             self.P.logger.error(traceback.format_exc())
-            return {"ret": "error", "message": str(e)}
+            return {"ret": "error", "message": f"생성 실패: {str(e)}"}
 
-    def process_ajax(self, sub, req):
+    def process_ajax(self, sub: str, req: Any) -> Union[Response, str]:
+        """Unified AJAX handler for the plugin."""
         try:
             if sub == 'generate':
-                text = req.form.get('text')
+                text = req.form.get('text', '')
                 voice = req.form.get('voice', 'default')
                 speed = float(req.form.get('speed', 1.0))
                 pitch = float(req.form.get('pitch', 1.0))
                 steps = int(req.form.get('steps', 5))
+                lang = req.form.get('lang')
+                if lang == 'auto': lang = None
                 
-                result = self.generate_tts(text, voice, speed, pitch, steps)
+                result = self.generate_tts(text, voice, speed, pitch, steps, lang)
                 return jsonify(result)
             
             elif sub == 'get_voices':
-                engine = self._get_engine()
+                current_engine = self._get_engine()
                 return jsonify({
-                    "ret": "success", 
+                    "ret": "success" if current_engine else "error", 
                     "voices": self.voices
                 })
             
@@ -197,7 +197,10 @@ class Logic(PluginModuleBase):
                     with open(log_path, 'r', encoding='utf-8') as f:
                         return f.read()
                 return "로그 파일이 존재하지 않습니다."
+            
+            return jsonify({"ret": "error", "message": f"Unknown sub-command: {sub}"})
+            
         except Exception as e:
-            self.P.logger.error(f"process_ajax error: {e}")
+            self.P.logger.error(f"[TTS] AJAX error ({sub}): {str(e)}")
             self.P.logger.error(traceback.format_exc())
-            return jsonify({"ret": "error", "message": str(e)})
+            return jsonify({"ret": "error", "message": f"시스템 오류: {str(e)}"})
